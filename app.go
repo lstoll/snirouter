@@ -81,8 +81,6 @@ func handleConn(underConn net.Conn, err error) {
 
 	// get the SNI host and replace the conn
 	sniHost, conn := getSNI(underConn)
-	// conn := underConn
-	// sniHost := ""
 
 	if sniHost != "" {
 		fmt.Printf("=== Incoming connection for %s\n", sniHost)
@@ -115,8 +113,7 @@ func handleConn(underConn net.Conn, err error) {
 		n, error := tlsconn.Read(data)
 		switch error {
 		case nil:
-			fmt.Println(string(data[0:n])) // Debug
-			//response = response + string(data[0:n])
+			fmt.Println(string(data[0:n]))
 		default:
 			fmt.Printf("Error: Reading data : %s \n", error)
 			read = false
