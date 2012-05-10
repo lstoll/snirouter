@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"snirouter/snirouter"
@@ -109,17 +110,23 @@ func handleConn(underConn net.Conn, err error) {
 	var read = true
 	var data = make([]byte, 1024)
 
+	// Open upstream connection
+	upconn, err := net.Dial("tcp", "localhost:9997")
+
 	for read {
 		n, error := tlsconn.Read(data)
 		switch error {
 		case nil:
-			fmt.Println(string(data[0:n]))
+			upconn.Write(data[0:n])
+		case io.EOF:
+			read = false
 		default:
 			fmt.Printf("Error: Reading data : %s \n", error)
 			read = false
 		}
 	}
-	fmt.Println("=== Closing Connection")
+	fmt.Println("=== Closing Connections")
+	upconn.Close()
 	conn.Close()
 }
 
