@@ -8,6 +8,7 @@ type Conn struct {
 	net.Conn
 	// Data to be replayed stashed here
 	InitialData []byte
+	ServerName string
 }
 
 func (c *Conn) Read(b []byte) (n int, err error) {
@@ -18,8 +19,4 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 		return c.Conn.Read(b)
 	}
 	return
-}
-
-func (c *Conn) SetInitialData(b []byte) {
-	c.InitialData = b
 }

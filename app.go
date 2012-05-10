@@ -17,22 +17,20 @@ func readInt16BE(data []byte, pos int) int {
 /**
 * Gets the SNI header. Returns the host if set, or an empty string, and a 'clean' connection to start TLS on
  */
-func getSNI(underConn net.Conn) (string, *snirouter.Conn) {
+func getSNI(underConn net.Conn) (*snirouter.Conn) {
 	var (
 		data      = make([]byte, 1024)
 		sniHeader = ""
 	)
 	// var conn(net.Conn)
-	conn := snirouter.Conn{underConn, []byte{}}
 
 	/* Read the SNI shizz
 	This is all thanks to https://github.com/axiak/filternet - lib/sniparse.js */
-	readLen, _ := conn.Read(data)
+	readLen, _ := underConn.Read(data)
 	// Check if it's a TLS connection
 	if data[0] != 22 {
 		// Not TLS handshake. Replay conn, pass through.
-		conn.SetInitialData(data[0:readLen])
-		return "", &conn
+		return &snirouter.Conn{underConn, data[0:readLen], ""}
 	}
 
 	// Session ID length
@@ -63,34 +61,29 @@ func getSNI(underConn net.Conn) (string, *snirouter.Conn) {
 		}
 
 	}
-	conn.SetInitialData(data[0:readLen])
 
-	return sniHeader, &conn
+	return &snirouter.Conn{underConn, data[0:readLen], sniHeader}
 }
 
-func handleConn(underConn net.Conn, err error) {
+func handleConn(underConn net.Conn) {
 	var (
 		certfile = ""
 		keyfile  = ""
 	)
 
-	if err != nil {
-		fmt.Printf("Error: Accepting data: %s\n", err)
-		os.Exit(2)
-	}
 	fmt.Printf("=== New Connection received from: %s \n", underConn.RemoteAddr())
 
 	// get the SNI host and replace the conn
-	sniHost, conn := getSNI(underConn)
+	conn := getSNI(underConn)
 
-	if sniHost != "" {
-		fmt.Printf("=== Incoming connection for %s\n", sniHost)
+	if conn.ServerName != "" {
+		fmt.Printf("=== Incoming connection for %s\n", conn.ServerName)
 	} else {
 		fmt.Println("=== No SNI header specified")
 	}
 
 	// TODO - this is where the magic cert lookup goes.
-	if sniHost == "test.com" {
+	if conn.ServerName == "test.com" {
 		certfile = "certs/test.com.crt"
 		keyfile = "certs/test.com.key"
 	} else {
@@ -112,16 +105,19 @@ func handleConn(underConn net.Conn, err error) {
 
 	// Open upstream connection
 	upconn, err := net.Dial("tcp", "localhost:9997")
+	if err != nil {
+		panic(fmt.Errorf("Error opening upstream conn: %v", err))
+	}
 
 	for read {
-		n, error := tlsconn.Read(data)
-		switch error {
+		n, err := tlsconn.Read(data)
+		switch err {
 		case nil:
 			upconn.Write(data[0:n])
 		case io.EOF:
 			read = false
 		default:
-			fmt.Printf("Error: Reading data : %s \n", error)
+			fmt.Printf("Error: Reading data : %s \n", err)
 			read = false
 		}
 	}
@@ -138,17 +134,19 @@ func main() {
 	)
 	fmt.Println("Initiating server on port 9998... (Ctrl-C to stop)")
 
-	lis, error := net.Listen("tcp", remote)
+	lis, err := net.Listen("tcp", remote)
 	defer lis.Close()
-	if error != nil {
-		fmt.Printf("Error creating listener: %s\n", error)
+	if err != nil {
+		fmt.Printf("Error creating listener: %s\n", err)
 		os.Exit(1)
 	}
 	for {
+		underConn, err := lis.Accept()
+		if err != nil {
+			fmt.Printf("Error: Accepting data: %s\n", err)
+			os.Exit(2)
+		}
 
-		underConn, error := lis.Accept()
-		go handleConn(underConn, error)
-
+		go handleConn(underConn)
 	}
-
 }
