@@ -7,6 +7,8 @@ Go based SNI router. Intercepts the SNI header, then serves the correct certific
 * SSL Client
 
     openssl s_client -connect localhost:9999 -servername test.com
+    # Need to force TLS for the non servername case
+    openssl s_client -connect localhost:9998 -tls1
 
 * SSL Server
 

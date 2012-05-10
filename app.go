@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -43,7 +44,6 @@ func getSNI(underConn net.Conn) (string, *snirouter.Conn) {
 	currentPos += 1 + int(data[currentPos])
 	// skip extensions length
 	currentPos += 2
-
 	for currentPos < len(data) {
 		if readInt16BE(data, currentPos) == 0 {
 			sniLength := readInt16BE(data, currentPos+2)
@@ -68,6 +68,11 @@ func getSNI(underConn net.Conn) (string, *snirouter.Conn) {
 }
 
 func handleConn(underConn net.Conn, err error) {
+	var (
+		certfile = ""
+		keyfile  = ""
+	)
+
 	if err != nil {
 		fmt.Printf("Error: Accepting data: %s\n", err)
 		os.Exit(2)
@@ -76,6 +81,8 @@ func handleConn(underConn net.Conn, err error) {
 
 	// get the SNI host and replace the conn
 	sniHost, conn := getSNI(underConn)
+	// conn := underConn
+	// sniHost := ""
 
 	if sniHost != "" {
 		fmt.Printf("=== Incoming connection for %s\n", sniHost)
@@ -83,10 +90,29 @@ func handleConn(underConn net.Conn, err error) {
 		fmt.Println("=== No SNI header specified")
 	}
 
-	// var read = true
+	// TODO - this is where the magic cert lookup goes.
+	if sniHost == "test.com" {
+		certfile = "certs/test.com.crt"
+		keyfile = "certs/test.com.key"
+	} else {
+		certfile = "certs/unknown.com.crt"
+		keyfile = "certs/unknown.com.key"
+	}
 
-	/*for read {
-		n, error := conn.Read(data)
+	cert, _ := tls.LoadX509KeyPair(certfile, keyfile)
+	config := tls.Config{
+		Certificates: []tls.Certificate{cert},
+	}
+
+	tlsconn := tls.Server(conn, &config)
+
+	fmt.Println("=== Created TLS Server")
+
+	var read = true
+	var data = make([]byte, 1024)
+
+	for read {
+		n, error := tlsconn.Read(data)
 		switch error {
 		case nil:
 			fmt.Println(string(data[0:n])) // Debug
@@ -95,7 +121,7 @@ func handleConn(underConn net.Conn, err error) {
 			fmt.Printf("Error: Reading data : %s \n", error)
 			read = false
 		}
-	}*/
+	}
 	fmt.Println("=== Closing Connection")
 	conn.Close()
 }
