@@ -15,7 +15,7 @@ func readInt16BE(data []byte, pos int) int {
 /**
 * Gets the SNI header. Returns the host if set, or an empty string, and a 'clean' connection to start TLS on
  */
-func getSNI(underConn net.Conn) (string, snirouter.Conn) {
+func getSNI(underConn net.Conn) (string, *snirouter.Conn) {
 	var (
 		data      = make([]byte, 1024)
 		sniHeader = ""
@@ -30,7 +30,7 @@ func getSNI(underConn net.Conn) (string, snirouter.Conn) {
 	if data[0] != 22 {
 		// Not TLS handshake. Replay conn, pass through.
 		// TODO conn.replay data ?
-		return "", conn
+		return "", &conn
 	}
 
 	// Session ID length
@@ -58,8 +58,41 @@ func getSNI(underConn net.Conn) (string, snirouter.Conn) {
 	}
 
 	// TODO conn.reset data?
-	return sniHeader, conn
+	return sniHeader, &conn
 
+}
+
+func handleConn(underConn net.Conn, err error) {
+	if err != nil {
+		fmt.Printf("Error: Accepting data: %s\n", err)
+		os.Exit(2)
+	}
+	fmt.Printf("=== New Connection received from: %s \n", underConn.RemoteAddr())
+
+	// get the SNI host and replace the conn
+	sniHost, conn := getSNI(underConn)
+
+	if sniHost != "" {
+		fmt.Printf("=== Incoming connection for %s\n", sniHost)
+	} else {
+		fmt.Println("=== No SNI header specified")
+	}
+
+	// var read = true
+
+	/*for read {
+		n, error := conn.Read(data)
+		switch error {
+		case nil:
+			fmt.Println(string(data[0:n])) // Debug
+			//response = response + string(data[0:n])
+		default:
+			fmt.Printf("Error: Reading data : %s \n", error)
+			read = false
+		}
+	}*/
+	fmt.Println("=== Closing Connection")
+	conn.Close()
 }
 
 func main() {
