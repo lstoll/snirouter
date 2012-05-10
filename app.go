@@ -112,36 +112,8 @@ func main() {
 	for {
 
 		underConn, error := lis.Accept()
-		if error != nil {
-			fmt.Printf("Error: Accepting data: %s\n", error)
-			os.Exit(2)
-		}
-		fmt.Printf("=== New Connection received from: %s \n", underConn.RemoteAddr())
+		go handleConn(underConn, error)
 
-		// get the SNI host and replace the conn
-		sniHost, conn := getSNI(underConn)
-
-		if sniHost != "" {
-			fmt.Printf("=== Incoming connection for %s\n", sniHost)
-		} else {
-			fmt.Println("=== No SNI header specified")
-		}
-
-		// var read = true
-
-		/*for read {
-			n, error := conn.Read(data)
-			switch error {
-			case nil:
-				fmt.Println(string(data[0:n])) // Debug
-				//response = response + string(data[0:n])
-			default:
-				fmt.Printf("Error: Reading data : %s \n", error)
-				read = false
-			}
-		}*/
-		fmt.Println("=== Closing Connection")
-		conn.Close()
 	}
 
 }
