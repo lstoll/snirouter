@@ -9,12 +9,23 @@ type Conn struct {
 	net.Conn
 	// the underlying connection
 	// Conn net.Conn
+	InitialData []byte
 }
 
 /* For now, these just pass through - but they are where we do the magic. */
 
 func (c *Conn) Read(b []byte) (n int, err error) {
-	return c.Conn.Read(b)
+	if len(c.InitialData) > 0 {
+		n = copy(b, c.InitialData)
+		c.InitialData = []byte{}
+	} else {
+		return c.Conn.Read(b)
+	}
+	return
+}
+
+func (c *Conn) SetInitialData(b []byte) {
+	c.InitialData = b
 }
 
 /* Pretty sure I don't need these - it will do it itself. */

@@ -21,15 +21,15 @@ func getSNI(underConn net.Conn) (string, *snirouter.Conn) {
 		sniHeader = ""
 	)
 	// var conn(net.Conn)
-	conn := snirouter.Conn{underConn}
+	conn := snirouter.Conn{underConn, []byte{}}
 
 	/* Read the SNI shizz
 	This is all thanks to https://github.com/axiak/filternet - lib/sniparse.js */
-	conn.Read(data)
+	readLen, _ := conn.Read(data)
 	// Check if it's a TLS connection
 	if data[0] != 22 {
 		// Not TLS handshake. Replay conn, pass through.
-		// TODO conn.replay data ?
+		conn.SetInitialData(data[0:readLen])
 		return "", &conn
 	}
 
@@ -54,12 +54,17 @@ func getSNI(underConn net.Conn) (string, *snirouter.Conn) {
 			currentPos += 5
 			sniHeader = string(data[currentPos:(currentPos + sniLength - 5)])
 			break
+		} else {
+			// TODO - there's still some weirdness here - need to figure structure better.
+			// For now, just break out if the first header isn't us
+			break
+			// currentPos += 4 + readInt16BE(data, currentPos+2)
 		}
+
 	}
+	conn.SetInitialData(data[0:readLen])
 
-	// TODO conn.reset data?
 	return sniHeader, &conn
-
 }
 
 func handleConn(underConn net.Conn, err error) {
