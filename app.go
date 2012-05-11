@@ -100,28 +100,18 @@ func handleConn(underConn net.Conn) {
 
 	fmt.Println("=== Created TLS Server")
 
-	var read = true
-	var data = make([]byte, 1024)
-
 	// Open upstream connection
 	upconn, err := net.Dial("tcp", "localhost:9997")
 	if err != nil {
 		panic(fmt.Errorf("Error opening upstream conn: %v", err))
 	}
 
-	for read {
-		n, err := tlsconn.Read(data)
-		switch err {
-		case nil:
-			upconn.Write(data[0:n])
-		case io.EOF:
-			read = false
-		default:
-			fmt.Printf("Error: Reading data : %s \n", err)
-			read = false
-		}
+	n, err := io.Copy(upconn, tlsconn)
+
+	if err != nil {
+		fmt.Printf("Error: Reading data : %s \n", err)
 	}
-	fmt.Println("=== Closing Connections")
+	fmt.Printf("=== Closing Connections after %d inbound bytes\n", n)
 	upconn.Close()
 	conn.Close()
 }
