@@ -70,11 +70,13 @@ func handleConn(underConn net.Conn) {
 		certfile = ""
 		keyfile  = ""
 	)
+	defer underConn.Close()
 
 	fmt.Printf("=== New Connection received from: %s \n", underConn.RemoteAddr())
 
 	// get the SNI host and replace the conn
 	conn := getSNI(underConn)
+	defer conn.Close()
 
 	if conn.ServerName != "" {
 		fmt.Printf("=== Incoming connection for %s\n", conn.ServerName)
@@ -97,6 +99,7 @@ func handleConn(underConn net.Conn) {
 	}
 
 	tlsconn := tls.Server(conn, &config)
+	defer tlsconn.Close()
 
 	fmt.Println("=== Created TLS Server")
 
