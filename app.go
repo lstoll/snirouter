@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"snirouter/snirouter"
+	"strings"
 )
 
 func readInt16BE(data []byte, pos int) int {
@@ -17,7 +18,7 @@ func readInt16BE(data []byte, pos int) int {
 /**
 * Gets the SNI header. Returns the host if set, or an empty string, and a 'clean' connection to start TLS on
  */
-func getSNI(underConn net.Conn) (*snirouter.Conn) {
+func getSNI(underConn net.Conn) *snirouter.Conn {
 	var (
 		data      = make([]byte, 1024)
 		sniHeader = ""
@@ -109,14 +110,57 @@ func handleConn(underConn net.Conn) {
 		panic(fmt.Errorf("Error opening upstream conn: %v", err))
 	}
 
-	n, err := io.Copy(upconn, tlsconn)
+	in, out := joinConns(tlsconn, upconn)
+	fmt.Printf("=== Closing Connections after: %d inbound, %d outbound bytes\n", in, out)
+	return
+}
 
-	if err != nil {
-		fmt.Printf("Error: Reading data : %s \n", err)
+type finishedConn struct {
+	Direction        int
+	BytesTransferred int64
+	Error            error
+}
+
+func connCopy(from net.Conn, to net.Conn, ch chan finishedConn, dir int) {
+	n, err := io.Copy(to, from)
+	if err == io.EOF {
+		err = nil
 	}
-	fmt.Printf("=== Closing Connections after %d inbound bytes\n", n)
-	upconn.Close()
-	conn.Close()
+	ch <- finishedConn{dir, n, err}
+}
+
+func joinConns(in net.Conn, out net.Conn) (inBytes int64, outBytes int64) {
+	cfin := make(chan finishedConn, 2)
+	defer close(cfin)
+
+	go connCopy(in, out, cfin, 0)
+	go connCopy(out, in, cfin, 1)
+
+	indone := false
+	outdone := false
+
+	for !(outdone && indone) {
+		fc := <-cfin
+		switch fc.Direction {
+		case 0:
+			if fc.Error != nil && !strings.HasSuffix(fc.Error.Error(), "use of closed network connection") {
+				fmt.Printf("Actual error on %d: %d bytes read, %s\n", fc.Direction, fc.BytesTransferred, fc.Error.Error())
+			}
+			fmt.Printf("inbound done: %d bytes\n", fc.BytesTransferred)
+			out.Close()
+			indone = true
+			inBytes = fc.BytesTransferred
+		case 1:
+			if fc.Error != nil && !strings.HasSuffix(fc.Error.Error(), "use of closed network connection") {
+				fmt.Printf("Actual error on %d: %d bytes read, %s\n", fc.Direction, fc.BytesTransferred, fc.Error.Error())
+			}
+			fmt.Printf("outbound done: %d bytes\n", fc.BytesTransferred)
+			outdone = true
+			outBytes = fc.BytesTransferred
+			in.Close()
+		}
+	}
+	return
 }
 
 func main() {
